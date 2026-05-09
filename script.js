@@ -42,14 +42,25 @@ class GestorProductos {
 
     cargarDatos() {
         const datosGuardados = localStorage.getItem('compras-takolandia');
-        if (datosGuardados) {
-            return JSON.parse(datosGuardados);
+        if (!datosGuardados) {
+            return {};
         }
-        return {};
+
+        try {
+            return JSON.parse(datosGuardados) || {};
+        } catch (error) {
+            console.warn('LocalStorage de compras-takolandia inválido, reiniciando datos.', error);
+            localStorage.removeItem('compras-takolandia');
+            return {};
+        }
     }
 
     guardarDatos() {
-        localStorage.setItem('compras-takolandia', JSON.stringify(this.datos));
+        try {
+            localStorage.setItem('compras-takolandia', JSON.stringify(this.datos));
+        } catch (error) {
+            console.warn('No se pudo guardar la lista en LocalStorage.', error);
+        }
     }
 
     agregarProducto(categoria, producto, cantidad = '') {

@@ -6,8 +6,13 @@ function cargarLista() {
         return;
     }
 
-    const lista = JSON.parse(datosLista);
-    mostrarLista(lista);
+    try {
+        const lista = JSON.parse(datosLista);
+        mostrarLista(lista);
+    } catch (error) {
+        console.warn('LocalStorage de lista-compras-vista inválido, vuelva a generar la lista.', error);
+        document.getElementById('contenedor-lista').innerHTML = '<p>La lista guardada está dañada. Vuelve a la página principal y haz clic en "Ver Lista" nuevamente.</p>';
+    }
 }
 
 // Mostrar la lista en el DOM
