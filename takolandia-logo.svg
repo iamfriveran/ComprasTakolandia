@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#004E89;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="30" cy="30" r="25" fill="url(#logoGradient)" />
+  
+  <!-- Taco icon -->
+  <path d="M20 25 Q30 15 40 25 Q35 35 30 40 Q25 35 20 25" fill="#FFE135" stroke="#D4AF37" stroke-width="1"/>
+  <ellipse cx="30" cy="32" rx="8" ry="3" fill="#8B4513"/>
+  <ellipse cx="30" cy="35" rx="6" ry="2" fill="#654321"/>
+  
+  <!-- Text -->
+  <text x="60" y="25" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="url(#logoGradient)">TAKOLANDIA</text>
+  <text x="60" y="42" font-family="Arial, sans-serif" font-size="10" fill="#666">RESTAURANTE</text>
+</svg>

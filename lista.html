@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Compras - Takolandia</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <img src="takolandia-logo.png" alt="Takolandia Logo" class="logo-img">
+            <h1>📋 Lista de Compras Takolandia</h1>
+        </div>
+        <p class="subtitle">Vista de la Lista Seleccionada</p>
+    </header>
+
+    <main>
+        <div class="acciones-header">
+            <button id="btnImprimir" class="btn-primary">🖨️ Imprimir Lista</button>
+            <button id="btnEnviarWhatsApp" class="btn-primary">📱 Enviar WhatsApp</button>
+            <button id="btnDescargar" class="btn-primary">📥 Descargar Lista</button>
+            <button id="btnVolver" class="btn-secondary">⬅️ Volver</button>
+        </div>
+
+        <div id="contenedor-lista" class="contenedor-lista">
+            <!-- La lista se generará aquí con JavaScript -->
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Compras Takolandia - Gestión de Productos</p>
+    </footer>
+
+    <script src="lista.js"></script>
+</body>
+</html>

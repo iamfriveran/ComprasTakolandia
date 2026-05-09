@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras Takolandia - Selección de Productos</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <img src="takolandia-logo.svg" alt="Takolandia Logo" class="logo-img">
+            <h1>📋 Compras Takolandia</h1>
+        </div>
+        <p class="subtitle">Selección de Productos para la Semana</p>
+    </header>
+
+    <main>
+        <div class="acciones-header">
+            <button id="btnLimpiar" class="btn-secondary">🗑️ Limpiar Selección</button>
+            <button id="btnVerLista" class="btn-primary">👁️ Ver Lista</button>
+            <button id="btnEnviarWhatsApp" class="btn-primary">📱 Enviar WhatsApp</button>
+            <button id="btnDescargar" class="btn-primary">📥 Descargar Lista</button>
+        </div>
+
+        <div id="contenedor-categorias" class="contenedor-categorias">
+            <!-- Las categorías se generarán aquí con JavaScript -->
+        </div>
+
+        <div class="resumen">
+            <h3>📊 Resumen</h3>
+            <p>Productos seleccionados: <strong id="total-seleccionados">0</strong></p>
+            <p>Productos personalizados: <strong id="total-personalizados">0</strong></p>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Compras Takolandia - Gestión de Productos</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
