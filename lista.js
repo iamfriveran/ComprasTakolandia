@@ -43,7 +43,8 @@ function mostrarLista(lista) {
             item.className = 'producto-item';
             item.innerHTML = `
                 <span class="producto-nombre">${producto.nombre}</span>
-                ${producto.cantidad ? `<span class="producto-cantidad">(Cantidad: ${producto.cantidad})</span>` : ''}
+                ${producto.disponible ? `<span class="producto-cantidad">(Disponible: ${producto.disponible})</span>` : ''}
+                ${producto.cantidad ? `<span class="producto-cantidad">(Comprar: ${producto.cantidad})</span>` : ''}
                 ${producto.personalizado ? '<span class="producto-personalizado">⭐ Personalizado</span>' : ''}
             `;
             listaProductos.appendChild(item);
@@ -76,8 +77,11 @@ function generarContenidoLista() {
         contenido += `${categoria.nombre}:\n`;
         for (let producto of categoria.productos) {
             let linea = `☑ ${producto.nombre}`;
+            if (producto.disponible) {
+                linea += ` (Disponible: ${producto.disponible})`;
+            }
             if (producto.cantidad) {
-                linea += ` (Cantidad: ${producto.cantidad})`;
+                linea += ` - Comprar: ${producto.cantidad}`;
             }
             contenido += linea + '\n';
         }

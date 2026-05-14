@@ -63,21 +63,23 @@ class GestorProductos {
         }
     }
 
-    agregarProducto(categoria, producto, cantidad = '') {
+    agregarProducto(categoria, producto, disponible = '', cantidad = '') {
         if (!this.datos[categoria]) {
             this.datos[categoria] = {};
         }
         this.datos[categoria][producto] = {
             seleccionado: false,
+            disponible: disponible,
             cantidad: cantidad,
             personalizado: false
         };
         this.guardarDatos();
     }
 
-    actualizarProducto(categoria, producto, seleccionado, cantidad) {
+    actualizarProducto(categoria, producto, seleccionado, disponible, cantidad) {
         if (this.datos[categoria] && this.datos[categoria][producto]) {
             this.datos[categoria][producto].seleccionado = seleccionado;
+            this.datos[categoria][producto].disponible = disponible;
             this.datos[categoria][producto].cantidad = cantidad;
             this.guardarDatos();
         }
@@ -140,6 +142,7 @@ function inicializarProductos() {
             if (!datosIniciales[categoria][producto]) {
                 datosIniciales[categoria][producto] = {
                     seleccionado: false,
+                    disponible: '',
                     cantidad: '',
                     personalizado: false
                 };
@@ -175,7 +178,7 @@ function renderizarCategorias() {
 
         // Productos predefinidos
         for (let producto of categoria.productos) {
-            const datosProducto = datos[producto] || { seleccionado: false, cantidad: '', personalizado: false };
+            const datosProducto = datos[producto] || { seleccionado: false, disponible: '', cantidad: '', personalizado: false };
             const itemDiv = crearItemProducto(nombreCategoria, producto, datosProducto, false);
             listProductos.appendChild(itemDiv);
         }
@@ -230,7 +233,7 @@ function crearItemProducto(categoria, producto, datos, esPersonalizado = false) 
     checkbox.type = 'checkbox';
     checkbox.checked = datos.seleccionado;
     checkbox.onchange = (e) => {
-        actualizarProducto(categoria, producto, e.target.checked, inputCantidad.value);
+        actualizarProducto(categoria, producto, e.target.checked, inputDisponible.value, inputCantidad.value);
         itemDiv.classList.toggle('seleccionado');
     };
 
@@ -239,9 +242,29 @@ function crearItemProducto(categoria, producto, datos, esPersonalizado = false) 
     nombreSpan.className = 'nombre-producto';
     nombreSpan.textContent = producto;
 
-    // Input de cantidad
+    // Input de disponible
+    const divDisponible = document.createElement('div');
+    divDisponible.className = 'cantidad-field';
+
+    const labelDisponible = document.createElement('label');
+    labelDisponible.className = 'cantidad-label';
+    labelDisponible.textContent = 'Disponible';
+
+    const inputDisponible = document.createElement('input');
+    inputDisponible.type = 'text';
+    inputDisponible.className = 'cantidad-input';
+    inputDisponible.value = datos.disponible;
+    inputDisponible.placeholder = '0';
+    inputDisponible.onchange = (e) => {
+        actualizarProducto(categoria, producto, checkbox.checked, e.target.value, inputCantidad.value);
+    };
+
+    divDisponible.appendChild(labelDisponible);
+    divDisponible.appendChild(inputDisponible);
+
+    // Input de cantidad a comprar
     const divCantidad = document.createElement('div');
-    divCantidad.className = 'cantidad-disponible';
+    divCantidad.className = 'cantidad-field';
 
     const labelCantidad = document.createElement('label');
     labelCantidad.className = 'cantidad-label';
@@ -254,7 +277,7 @@ function crearItemProducto(categoria, producto, datos, esPersonalizado = false) 
     inputCantidad.placeholder = '1';
     inputCantidad.min = '0';
     inputCantidad.onchange = (e) => {
-        actualizarProducto(categoria, producto, checkbox.checked, e.target.value);
+        actualizarProducto(categoria, producto, checkbox.checked, inputDisponible.value, e.target.value);
     };
 
     divCantidad.appendChild(labelCantidad);
@@ -263,6 +286,7 @@ function crearItemProducto(categoria, producto, datos, esPersonalizado = false) 
     // Botón eliminar (solo para productos personalizados)
     itemDiv.appendChild(checkbox);
     itemDiv.appendChild(nombreSpan);
+    itemDiv.appendChild(divDisponible);
     itemDiv.appendChild(divCantidad);
 
     if (esPersonalizado) {
@@ -398,8 +422,11 @@ function generarContenidoLista() {
         for (let producto in datos) {
             if (datos[producto].seleccionado) {
                 let linea = `☑ ${producto}`;
+                if (datos[producto].disponible) {
+                    linea += ` (Disponible: ${datos[producto].disponible})`;
+                }
                 if (datos[producto].cantidad) {
-                    linea += ` (Cantidad: ${datos[producto].cantidad})`;
+                    linea += ` - Comprar: ${datos[producto].cantidad}`;
                 }
                 productosSeleccionados.push(linea);
                 haySeleccionados = true;
@@ -438,6 +465,7 @@ function generarDatosLista() {
             if (datos[producto].seleccionado) {
                 productosSeleccionados.push({
                     nombre: producto,
+                    disponible: datos[producto].disponible,
                     cantidad: datos[producto].cantidad,
                     personalizado: datos[producto].personalizado
                 });
