@@ -43,7 +43,7 @@ function mostrarLista(lista) {
             item.className = 'producto-item';
             item.innerHTML = `
                 <span class="producto-nombre">${producto.nombre}</span>
-                ${producto.cantidad ? `<span class="producto-cantidad">(Disponible: ${producto.cantidad})</span>` : ''}
+                ${producto.cantidad ? `<span class="producto-cantidad">(Cantidad: ${producto.cantidad})</span>` : ''}
                 ${producto.personalizado ? '<span class="producto-personalizado">⭐ Personalizado</span>' : ''}
             `;
             listaProductos.appendChild(item);
@@ -77,7 +77,7 @@ function generarContenidoLista() {
         for (let producto of categoria.productos) {
             let linea = `☑ ${producto.nombre}`;
             if (producto.cantidad) {
-                linea += ` (Disponible: ${producto.cantidad})`;
+                linea += ` (Cantidad: ${producto.cantidad})`;
             }
             contenido += linea + '\n';
         }

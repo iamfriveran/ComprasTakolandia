@@ -245,13 +245,14 @@ function crearItemProducto(categoria, producto, datos, esPersonalizado = false) 
 
     const labelCantidad = document.createElement('label');
     labelCantidad.className = 'cantidad-label';
-    labelCantidad.textContent = 'Disponible';
+    labelCantidad.textContent = 'Cantidad';
 
     const inputCantidad = document.createElement('input');
-    inputCantidad.type = 'text';
+    inputCantidad.type = 'number';
     inputCantidad.className = 'cantidad-input';
     inputCantidad.value = datos.cantidad;
-    inputCantidad.placeholder = '0';
+    inputCantidad.placeholder = '1';
+    inputCantidad.min = '0';
     inputCantidad.onchange = (e) => {
         actualizarProducto(categoria, producto, checkbox.checked, e.target.value);
     };
@@ -398,7 +399,7 @@ function generarContenidoLista() {
             if (datos[producto].seleccionado) {
                 let linea = `☑ ${producto}`;
                 if (datos[producto].cantidad) {
-                    linea += ` (Disponible: ${datos[producto].cantidad})`;
+                    linea += ` (Cantidad: ${datos[producto].cantidad})`;
                 }
                 productosSeleccionados.push(linea);
                 haySeleccionados = true;
