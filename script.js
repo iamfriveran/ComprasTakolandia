@@ -2,11 +2,11 @@
 const categorias = {
     'Mayorista': {
         emoji: '🌾',
-        productos: ['Aguacates', 'Cebolla', 'Limones', 'Pimiento rojo', 'Pimiento verde', 'Piñas', 'Tomate rojo', 'Tomate verde', 'Aji rocoto']
+        productos: ['Aguacates', 'Cebolla', 'Limones', 'Pimiento rojo', 'Pimiento verde', 'Piñas', 'Tomate rojo', 'Tomate verde', 'Aji rocoto', 'Ajo', 'Hiervitas']
     },
     'Supermaxi': {
         emoji: '🏪',
-        productos: ['Tortillas de tacos', 'Tortilla de burritos', 'Tortilla de Flautas', 'Esencia de coco', 'Leche condensada', 'Crema de coco', 'Crema de Leche', 'Hielo', 'Tajin', 'Achiote', 'Gomitas']
+        productos: ['Tortillas de tacos', 'Tortilla de burritos', 'Tortilla de Flautas', 'Esencia de coco', 'Leche condensada', 'Crema de coco', 'Crema de Leche', 'Hielo', 'Tajin', 'Achiote', 'Gomitas', 'Lechuga', 'Fréjol', 'Menta caramelo', 'Leche 6 pack', 'Menta - hierba', 'Zumo de limón', 'Sal', 'Vinagre', 'Jalapeño', 'Chamoy', 'Salsa china', 'Zumo de maracuyá', 'Zumo de Tamarindo', 'Zumo de Mango']
     },
     'Carnes': {
         emoji: '🥩',
@@ -22,11 +22,11 @@ const categorias = {
     },
     'Plasticos': {
         emoji: '🛍️',
-        productos: ['Lonchera grande', 'Lonchera pequeña', 'Vasos de Michelada con tapa', 'Sorbetes', 'Botellas con tapa', 'Salseros con tapa', 'Servilletas']
+        productos: ['Lonchera grande', 'Lonchera pequeña', 'Vasos de Michelada con tapa', 'Sorbetes', 'Botellas con tapa', 'Salseros con tapa', 'Servilletas', 'Fundas para despachar', 'Fundas de basura']
     },
     'Licores': {
         emoji: '🍺',
-        productos: ['Pilsener Grande', 'Pilsener Personal', 'Club Grande', 'Club Personal', 'Corona Personal', 'Coronita', 'Tekila', 'Ron', 'Triple Seco', 'Toronja Imperial', 'Jugo de Naranja']
+        productos: ['Pilsener Grande', 'Pilsener Personal', 'Club Grande', 'Club Personal', 'Corona Personal', 'Coronita', 'Tekila', 'Ron', 'Triple Seco', 'Toronja Imperial', 'Jugo de Naranja', 'Botellón de agua']
     },
     'Limpieza': {
         emoji: '🧹',
