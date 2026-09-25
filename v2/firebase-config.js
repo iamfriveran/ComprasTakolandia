@@ -1,10 +1,10 @@
 // =====================================================
-//  CONFIGURACIÓN DE FIREBASE
+//  CONFIGURACIÓN DE FIREBASE Y DEL RESTAURANTE
 // =====================================================
 // Pega aquí los datos de tu proyecto de Firebase
 // (Consola de Firebase → ⚙️ Configuración del proyecto → Tus apps → Web → "Configuración").
-// Mientras apiKey diga "PEGA_AQUI…", la app funciona en MODO LOCAL
-// (guarda todo solo en el teléfono/computadora, sin compartir).
+// Mientras apiKey diga "PEGA_AQUI…", la app funciona en MODO LOCAL de prueba
+// (todo se guarda solo en ese teléfono/computadora).
 
 export const firebaseConfig = {
     apiKey: "PEGA_AQUI_TU_API_KEY",
@@ -15,8 +15,18 @@ export const firebaseConfig = {
     appId: "1:000000000000:web:0000000000000000"
 };
 
+// Correo(s) del ADMINISTRADOR (la cuenta de correo/contraseña que creaste en
+// Firebase → Authentication). Debe ser el MISMO correo que pongas en firestore.rules.
+export const ADMIN_EMAILS = ['tu-correo@gmail.com'];
+
+// Nombre que verá el administrador al entrar
+export const ADMIN_NOMBRE = 'Francisco';
+
+// Código de país para los números de celular (Ecuador = 593).
+// Los usuarios pueden escribir su número como 0962737275; la app lo convierte a 593962737275.
+export const CODIGO_PAIS = '593';
+
 // Identificador del restaurante dentro de la base de datos.
-// Si algún día usas la app para otro local, cambia este nombre.
 export const RESTAURANTE_ID = 'takolandia';
 
 // Versión de Firebase que se descarga (no hace falta cambiarla).

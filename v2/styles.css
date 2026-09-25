@@ -142,7 +142,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
     grid-template-columns: auto auto 1fr auto;
     grid-template-areas:
         "nombre nombre nombre quitar"
-        "hay comprar unidad unidad";
+        "hay comprar unidad unidad"
+        "quien quien quien quien";
     align-items: end;
     gap: 6px 8px;
     padding: 8px 10px;
@@ -343,7 +344,7 @@ footer { text-align: center; color: var(--gris); font-size: .85rem; padding: 24p
 }
 .pestana { flex: 1; background: transparent; color: var(--gris); }
 .pestana.activo { background: var(--morado); color: #fff; }
-body[data-modo="inventario"] .solo-compras,
+body:not([data-modo="compras"]) .solo-compras,
 body:not([data-modo="inventario"]) .solo-inventario { display: none; }
 .ayuda-inventario { text-align: center; color: var(--gris); font-size: .92rem; margin: 0 auto 14px; max-width: 520px; }
 .cargando { grid-column: 1 / -1; text-align: center; color: var(--gris); padding: 32px 0; }
@@ -440,3 +441,103 @@ body:not([data-modo="inventario"]) .solo-inventario { display: none; }
 .opcion.vacia { color: var(--gris); font-style: italic; cursor: default; }
 .opcion-extra { font-size: .78rem; color: var(--gris); white-space: nowrap; }
 .opcion-extra.agotado { color: #B3124F; font-weight: 700; }
+
+/* ===== Saludo y sesión ===== */
+.saludo {
+    text-align: center;
+    font-weight: 700;
+    color: var(--morado);
+    font-size: 1.05rem;
+    margin: 0 auto 12px;
+}
+.badge-mini {
+    display: inline-grid; place-items: center;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    margin-left: 4px;
+    border-radius: 999px;
+    background: var(--rosa); color: #fff;
+    font-size: .75rem; font-weight: 800;
+}
+.pestanas { max-width: 520px; }
+.pestana { padding: 10px 8px; }
+
+/* ===== Productos pendientes de aprobación ===== */
+.item.pendiente { background: #FFF6DA; outline: 1px dashed var(--amarillo); }
+.item.pendiente .item-nombre::after { content: " ⏳"; }
+.esperando { margin-top: 10px; font-size: .85rem; color: var(--gris); }
+
+/* ===== Pestaña Admin ===== */
+.admin-card { border-top-color: var(--amarillo); }
+.lista-admin { list-style: none; display: flex; flex-direction: column; margin-top: 8px; }
+.fila-admin {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--borde);
+}
+.fila-admin:last-child { border-bottom: 0; }
+.fila-admin-info { display: flex; flex-direction: column; min-width: 0; }
+.fila-admin-titulo { overflow-wrap: anywhere; }
+.fila-admin-titulo b { color: var(--morado); }
+.fila-admin-acciones { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-aprobar { background: var(--verde-wa); color: #fff; padding: 6px 12px; min-height: 36px; }
+.btn-rechazar {
+    background: #fff; color: #B3124F; border: 2px solid #F3B3CD;
+    padding: 0 10px; min-height: 36px; min-width: 36px;
+}
+.btn-rechazar.confirmando { background: #B3124F; color: #fff; border-color: #B3124F; }
+.form-usuario { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.form-usuario input {
+    padding: 11px; font: inherit;
+    border: 2px solid var(--borde); border-radius: 10px;
+}
+.form-usuario input:focus { border-color: var(--morado); outline: none; }
+
+/* ===== Elegir contacto de WhatsApp ===== */
+.lista-contactos { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 14px 0; overflow-y: auto; }
+.contacto {
+    width: 100%;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--fondo);
+    border: 2px solid var(--borde);
+    color: var(--texto);
+    text-align: left;
+}
+.contacto:hover { border-color: var(--verde-wa); }
+.contacto-nombre { font-weight: 700; }
+.contacto-tel { color: var(--gris); font-size: .88rem; font-weight: 500; white-space: nowrap; }
+.contacto.otro { background: #fff; border-style: dashed; }
+
+/* ===== Login ===== */
+.login-form { display: flex; flex-direction: column; gap: 12px; }
+.login-caja input[type="tel"] { font-size: 1.2rem; letter-spacing: .03em; text-align: center; }
+body:not(.con-firebase) .solo-firebase { display: none; }
+body.con-firebase .ayuda-local { display: none; }
+.ayuda-local { font-size: .85rem; color: var(--gris); background: var(--crema); padding: 10px; border-radius: 10px; }
+.pestana { font-size: .88rem; padding: 10px 4px; white-space: nowrap; }
+
+/* ===== Pedidos por persona ===== */
+.item-quien { grid-area: quien; display: flex; flex-wrap: wrap; gap: 4px; }
+.item-quien:empty { display: none; }
+.quien {
+    font-size: .76rem; font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid var(--borde);
+    color: var(--gris);
+}
+.quien.yo { border-color: var(--morado); color: var(--morado); }
+.quien.total { background: var(--morado); border-color: var(--morado); color: #fff; }
+.item:not(.mio) { background: #F3F1F8; }
+.item:not(.mio) .cantidad { border-color: var(--borde); }
+.btn-lista.otros { border: 2px solid var(--amarillo); }
+.opcion-extra.otros { color: var(--morado); }
+.area-sel { padding: 11px; font: inherit; border: 2px solid var(--borde); border-radius: 10px; background: #fff; }
+.resumen-inicio { font-weight: 600; color: var(--morado); }
+.resumen-inicio:empty, #resumen-areas:empty { display: none; }
+.titulo-admin { font-size: 1.1rem; color: var(--morado); margin-bottom: 8px; }
+.btn-ver { min-height: 36px; padding: 6px 14px; }
+#modalEnviar { z-index: 55; }
+#modalSemana .modal-acciones { flex-wrap: wrap; }

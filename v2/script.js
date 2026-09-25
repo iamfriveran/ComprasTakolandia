@@ -6,7 +6,6 @@ import * as A from './almacen.js';
 const datos = A.datos;
 
 // ----- CONFIGURACIÓN -----
-const TELEFONO_WHATSAPP = '593962737275';   // solo números, con código de país
 const NOMBRE_NEGOCIO = 'Takolandia';
 
 const UNIDADES = ['', 'unid', 'kg', 'lb', 'g', 'litro', 'galón', 'caja', 'funda',
@@ -75,7 +74,60 @@ function leerLocal(k) { try { return localStorage.getItem(k); } catch (e) { retu
 function escribirLocal(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* nada */ } }
 
 const buscarCat = n => (datos.catalogo || []).find(c => igual(c.nombre, n));
-const itemsDe = n => datos.lista[n] || (datos.lista[n] = []);
+// ----- Lista de compras: cada persona tiene su propio pedido por producto -----
+const AREAS = ['Cocina', 'Cafetería / Mesas', 'Administración', 'Otra'];
+const ICONO_AREA = { 'Cocina': '🍳', 'Cafetería / Mesas': '☕', 'Administración': '👑', 'Otra': '👤' };
+const iconoArea = a => ICONO_AREA[a] || '👤';
+
+const pedidosDe = e => Object.entries((e && e.pedidos) || {})
+    .map(([clave, p]) => ({ clave, ...p }))
+    .filter(p => Number(p.cantidad) > 0)
+    .sort((a, b) => (a.fecha || 0) - (b.fecha || 0));
+const totalDe = pedidos => Math.round(pedidos.reduce((s, p) => s + Number(p.cantidad || 0), 0) * 100) / 100;
+
+// Productos de una categoría que alguien pidió: [{ nombre, unidad, pendiente, pedidos, total, mio }]
+function itemsDe(catNombre) {
+    const mapa = datos.lista[catNombre] || {};
+    const clave = A.miClave();
+    return Object.keys(mapa)
+        .map(nombre => {
+            const e = mapa[nombre];
+            const pedidos = pedidosDe(e);
+            return { nombre, unidad: e.unidad || '', pendiente: !!e.pendiente, pedidos,
+                     total: totalDe(pedidos), mio: pedidos.find(p => p.clave === clave) || null };
+        })
+        .filter(i => i.pedidos.length)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+const itemDe = (catNombre, prod) => itemsDe(catNombre).find(i => igual(i.nombre, prod)) || null;
+
+// Pone o cambia MI pedido de un producto
+function pedir(catNombre, prod, cantidad, extra = {}) {
+    const mapa = datos.lista[catNombre] || (datos.lista[catNombre] = {});
+    const nombre = Object.keys(mapa).find(x => igual(x, prod)) || prod;
+    const e = mapa[nombre] || (mapa[nombre] = { unidad: '', pendiente: false, pedidos: {} });
+    e.pedidos = e.pedidos || {};
+    if (extra.pendiente) e.pendiente = true;
+    if (extra.unidad && !e.unidad) e.unidad = extra.unidad;
+    const s = A.sesionActual() || {};
+    e.pedidos[A.miClave()] = { cantidad, nombre: s.nombre || '', area: s.area || '', fecha: Date.now() };
+    A.guardarPedido(catNombre, nombre, A.miClave());
+    return nombre;
+}
+function quitarMiPedido(catNombre, prod) {
+    const e = (datos.lista[catNombre] || {})[prod];
+    if (!e || !e.pedidos) return;
+    delete e.pedidos[A.miClave()];
+    A.guardarPedido(catNombre, prod, A.miClave());
+}
+// Quita el producto completo (todos los pedidos). Lo usa el administrador.
+function quitarDeLaLista(catNombre, prod) {
+    const mapa = datos.lista[catNombre] || {};
+    const nombre = Object.keys(mapa).find(x => igual(x, prod));
+    if (!nombre) return;
+    delete mapa[nombre];
+    A.guardarEntrada(catNombre, nombre);
+}
 const stockDe = (cat, prod) => (datos.stock[cat] || {})[prod] || null;
 const esBase = (cat, prod) => !!CATEGORIAS_BASE[cat] && CATEGORIAS_BASE[cat].productos.some(p => igual(p, prod));
 const esAgotado = hay => /^0+([.,]0+)?(\s|$)/.test(String(hay || '').trim());
@@ -92,9 +144,10 @@ function hace(ms) {
 }
 
 // ----- ESTADO DE LA PANTALLA -----
-let modo = leerLocal('comprafacil-modo') === 'inventario' ? 'inventario' : 'compras';
+let modo = ['inventario', 'admin'].includes(leerLocal('comprafacil-modo')) ? leerLocal('comprafacil-modo') : 'compras';
 const editando = new Set();                       // categorías con el panel ⚙️ abierto
 const borrador = { nombre: '', emoji: EMOJIS[0] }; // tarjeta "Nueva categoría"
+const borradorUsuario = { nombre: '', telefono: '', area: 'Cocina' }; // formulario de usuarios (admin)
 let renderPendiente = false;
 
 // Agrega al catálogo los productos base que falten (sin revivir los que borraste)
@@ -143,17 +196,30 @@ function render() {
     const foco = document.activeElement && document.activeElement.dataset
         ? document.activeElement.dataset.foco : null;
 
+    const admin = A.esAdmin();
+    if (modo === 'admin' && !admin) modo = 'compras';
     document.body.dataset.modo = modo;
-    $('tabCompras').classList.toggle('activo', modo === 'compras');
-    $('tabInventario').classList.toggle('activo', modo === 'inventario');
-    $('tabCompras').setAttribute('aria-selected', modo === 'compras');
-    $('tabInventario').setAttribute('aria-selected', modo === 'inventario');
+    [['tabCompras', 'compras'], ['tabInventario', 'inventario'], ['tabAdmin', 'admin']].forEach(([id, m]) => {
+        $(id).classList.toggle('activo', modo === m);
+        $(id).setAttribute('aria-selected', modo === m);
+    });
+    $('tabAdmin').classList.toggle('oculto', !admin);
+    $('btnCerrarSemana').classList.toggle('oculto', !admin);
+    const pendientes = datos.solicitudes.length;
+    $('badge-solicitudes').textContent = pendientes;
+    $('badge-solicitudes').classList.toggle('oculto', !admin || !pendientes);
 
     const cont = $('contenedor-categorias');
     cont.innerHTML = '';
-    datos.catalogo.forEach(cat =>
-        cont.appendChild(modo === 'compras' ? tarjetaCompras(cat) : tarjetaInventario(cat)));
-    if (modo === 'compras') cont.appendChild(tarjetaNuevaCategoria());
+    if (modo === 'admin') {
+        cont.appendChild(tarjetaSolicitudes());
+        cont.appendChild(tarjetaUsuarios());
+        cont.appendChild(tarjetaHistorial());
+    } else {
+        datos.catalogo.forEach(cat =>
+            cont.appendChild(modo === 'compras' ? tarjetaCompras(cat) : tarjetaInventario(cat)));
+        if (modo === 'compras') cont.appendChild(tarjetaNuevaCategoria());
+    }
 
     if (foco) {
         const e = [...cont.querySelectorAll('[data-foco]')].find(x => x.dataset.foco === foco);
@@ -173,7 +239,7 @@ function encabezado(cat, conEditar) {
         const agotados = cat.productos.filter(p => esAgotado((stockDe(cat.nombre, p) || {}).hay)).length;
         if (agotados) der.appendChild(el('span', 'badge agotado', `${agotados} agotado${agotados > 1 ? 's' : ''}`));
     }
-    if (conEditar) {
+    if (conEditar && A.esAdmin()) {
         const b = boton('btn-icono' + (editando.has(cat.nombre) ? ' activo' : ''), '⚙️', () => {
             editando.has(cat.nombre) ? editando.delete(cat.nombre) : editando.add(cat.nombre);
             render();
@@ -195,10 +261,10 @@ function tarjetaCompras(cat) {
     card.appendChild(buscador(cat, items));
 
     const ul = el('ul', 'items');
-    items.forEach((it, idx) => ul.appendChild(filaCompra(cat, it, idx)));
+    items.forEach(it => ul.appendChild(filaCompra(cat, it)));
     card.appendChild(ul);
 
-    if (editando.has(cat.nombre)) card.appendChild(panelEditar(cat));
+    if (editando.has(cat.nombre) && A.esAdmin()) card.appendChild(panelEditar(cat));
     return card;
 }
 
@@ -208,7 +274,7 @@ let idBuscador = 0;
 
 function opcionesDe(cat, items, texto) {
     const q = normal(texto);
-    const enLista = p => items.some(i => igual(i.nombre, p));
+    const enLista = p => items.some(i => i.mio && igual(i.nombre, p));
     if (!q) return ordenar(cat.productos).filter(p => !enLista(p)).map(p => ({ tipo: 'prod', nombre: p }));
 
     const encontrados = [];
@@ -233,12 +299,12 @@ function buscador(cat, items) {
     const caja = el('div', 'buscador');
     const idLista = 'opciones-' + (++idBuscador);
     const inp = el('input', 'buscar');
-    const libres = cat.productos.filter(p => !items.some(i => igual(i.nombre, p))).length;
+    const libres = cat.productos.filter(p => !items.some(i => i.mio && igual(i.nombre, p))).length;
     inp.type = 'search';
     inp.autocomplete = 'off';
     inp.spellcheck = false;
     inp.placeholder = cat.productos.length
-        ? (libres ? `🔍 Escribe o toca para elegir (${libres})` : '✔ Todo agregado · escribe para crear')
+        ? (libres ? `🔍 Buscar o elegir (${libres})` : '✔ Todo agregado · escribe para crear')
         : '🔍 Escribe el primer producto';
     inp.dataset.foco = 'dd|' + cat.nombre;
     inp.setAttribute('role', 'combobox');
@@ -254,9 +320,9 @@ function buscador(cat, items) {
 
     const cerrar = () => { lista.classList.add('oculto'); inp.setAttribute('aria-expanded', 'false'); };
     const elegir = o => {
-        if (o.tipo === 'ya') { aviso('Ya está en la lista'); return; }
+        if (o.tipo === 'ya') { aviso('Ya lo pediste. Cambia la cantidad en la lista.'); return; }
         inp.value = '';
-        if (o.tipo === 'nuevo') nuevoProducto(cat, o.nombre, true);
+        if (o.tipo === 'nuevo') A.esAdmin() ? nuevoProducto(cat, o.nombre, true) : pedirProducto(cat, o.nombre);
         else agregar(cat, o.nombre);
     };
     const pintar = () => {
@@ -270,9 +336,9 @@ function buscador(cat, items) {
             li.setAttribute('role', 'option');
             const nombre = el('span', 'opcion-nombre');
             if (o.tipo === 'nuevo') {
-                nombre.append('➕ Agregar «');
+                nombre.append(A.esAdmin() ? '➕ Agregar «' : '📨 Pedir «');
                 nombre.appendChild(el('b', '', o.nombre));
-                nombre.append('» como nuevo');
+                nombre.append(A.esAdmin() ? '» como nuevo' : '» al administrador');
             } else {
                 // resalta las letras que coinciden
                 const i0 = q ? normal(o.nombre).indexOf(q) : -1;
@@ -283,10 +349,13 @@ function buscador(cat, items) {
                 } else nombre.textContent = o.nombre;
             }
             li.appendChild(nombre);
-            if (o.tipo === 'ya') li.appendChild(el('small', 'opcion-extra', '✓ en la lista'));
+            if (o.tipo === 'ya') li.appendChild(el('small', 'opcion-extra', '✓ ya lo pediste'));
             else if (o.tipo === 'prod') {
+                const otros = items.find(i => igual(i.nombre, o.nombre));
                 const s = stockDe(cat.nombre, o.nombre);
-                if (s) li.appendChild(el('small', 'opcion-extra' + (esAgotado(s.hay) ? ' agotado' : ''),
+                if (otros) li.appendChild(el('small', 'opcion-extra otros',
+                    '📝 ' + otros.pedidos.map(x => x.nombre).join(', ')));
+                else if (s) li.appendChild(el('small', 'opcion-extra' + (esAgotado(s.hay) ? ' agotado' : ''),
                     esAgotado(s.hay) ? '⚠️ agotado' : 'hay ' + s.hay));
             }
             li.onmousedown = e => e.preventDefault();   // no cerrar el teclado al tocar
@@ -313,17 +382,26 @@ function buscador(cat, items) {
     return caja;
 }
 
-function filaCompra(cat, it, idx) {
+function filaCompra(cat, it) {
     const s = stockDe(cat.nombre, it.nombre);
     const li = el('li', 'item' + (esBase(cat.nombre, it.nombre) ? '' : ' personalizado')
-                     + (s && esAgotado(s.hay) ? ' agotado' : ''));
+                     + (s && esAgotado(s.hay) ? ' agotado' : '') + (it.pendiente ? ' pendiente' : '')
+                     + (it.mio ? ' mio' : ''));
+    if (it.pendiente) li.title = 'Producto nuevo esperando aprobación del administrador';
 
     li.appendChild(el('span', 'item-nombre', it.nombre));
-    li.appendChild(boton('quitar', '✕', () => {
-        itemsDe(cat.nombre).splice(idx, 1);
-        A.guardarLista(cat.nombre);
-        render();
-    }, 'Quitar de la lista'));
+    // ✕ quita MI pedido. El administrador puede quitar el producto completo.
+    if (it.mio) {
+        li.appendChild(boton('quitar', '✕', () => {
+            quitarMiPedido(cat.nombre, it.nombre);
+            render();
+            aviso(it.pedidos.length > 1 ? 'Quitaste tu pedido (los demás se mantienen)' : `${it.nombre} salió de la lista`);
+        }, 'Quitar mi pedido'));
+    } else if (A.esAdmin()) {
+        const x = boton('quitar', '✕', null, 'Quitar de la lista');
+        x.onclick = () => confirmarDosToques(x, '¿Quitar?', () => { quitarDeLaLista(cat.nombre, it.nombre); render(); });
+        li.appendChild(x);
+    } else li.appendChild(el('span', 'quitar'));
 
     // Hay (stock compartido)
     const campoHay = el('label', 'campo campo-hay');
@@ -337,29 +415,36 @@ function filaCompra(cat, it, idx) {
     campoHay.appendChild(hay);
     li.appendChild(campoHay);
 
-    // Comprar
+    // Mi pedido
     const campoComprar = el('div', 'campo campo-comprar');
-    campoComprar.appendChild(el('span', '', 'Comprar'));
+    campoComprar.appendChild(el('span', '', 'Yo pido'));
     const caja = el('div', 'cantidad');
     const q = el('input');
     q.type = 'number'; q.min = '0'; q.step = '0.5'; q.inputMode = 'decimal';
-    q.setAttribute('aria-label', 'Cantidad a comprar');
+    q.setAttribute('aria-label', 'Mi cantidad');
     q.dataset.foco = 'q|' + cat.nombre + '|' + it.nombre;
-    q.value = it.cantidad;
+    q.value = it.mio ? it.mio.cantidad : 0;
     const fijar = v => {
-        v = Math.max(0.5, Math.round(v * 100) / 100);
-        it.cantidad = v; q.value = v;
-        A.guardarLista(cat.nombre);
+        v = Math.round(v * 100) / 100;
+        if (v <= 0) {
+            if (!it.mio) { q.value = 0; return; }
+            quitarMiPedido(cat.nombre, it.nombre);
+            render();
+            return;
+        }
+        pedir(cat.nombre, it.nombre, v);
+        q.value = v;
+        if (!it.mio) render(); else pedirRender();
     };
-    q.onchange = () => fijar(parseFloat(q.value) || 1);
+    q.onchange = () => fijar(parseFloat(q.value) || 0);
     caja.append(
-        boton('menos', '−', () => fijar((parseFloat(q.value) || 0) - 1), 'Menos'),
+        boton('menos', '−', () => fijar(Math.max((parseFloat(q.value) || 0) - 1, it.mio && q.value > 1 ? 0.5 : 0)), 'Menos'),
         q,
         boton('mas', '+', () => fijar((parseFloat(q.value) || 0) + 1), 'Más'));
     campoComprar.appendChild(caja);
     li.appendChild(campoComprar);
 
-    // Unidad
+    // Unidad (la misma para todos)
     const campoU = el('label', 'campo campo-unidad');
     campoU.appendChild(el('span', '', 'Unidad'));
     const u = el('select', 'unidad');
@@ -367,9 +452,27 @@ function filaCompra(cat, it, idx) {
     (UNIDADES.includes(it.unidad) ? UNIDADES : [...UNIDADES, it.unidad])
         .forEach(x => u.appendChild(new Option(x || '—', x)));
     u.value = it.unidad || '';
-    u.onchange = () => { it.unidad = u.value; A.guardarLista(cat.nombre); };
+    u.onchange = () => {
+        const e = datos.lista[cat.nombre][it.nombre];
+        e.unidad = u.value;
+        A.guardarEntrada(cat.nombre, it.nombre);
+        pedirRender();
+    };
     campoU.appendChild(u);
     li.appendChild(campoU);
+
+    // Quién lo pidió y total
+    const quien = el('div', 'item-quien');
+    it.pedidos.forEach(p => {
+        const chip = el('span', 'quien' + (p.clave === A.miClave() ? ' yo' : ''),
+            `${iconoArea(p.area)} ${p.clave === A.miClave() ? 'Yo' : p.nombre || 'Alguien'}: ${formatear(Number(p.cantidad))}`);
+        chip.title = `${p.nombre || ''}${p.area ? ' · ' + p.area : ''} · ${hace(p.fecha)}`;
+        quien.appendChild(chip);
+    });
+    if (it.pedidos.length > 1) {
+        quien.appendChild(el('span', 'quien total', `Total: ${formatear(it.total)}${it.unidad ? ' ' + it.unidad : ''}`));
+    }
+    li.appendChild(quien);
     return li;
 }
 
@@ -404,14 +507,13 @@ function tarjetaInventario(cat) {
         hay.onkeydown = e => { if (e.key === 'Enter') hay.blur(); };
         li.appendChild(hay);
 
-        const esta = enLista.some(i => igual(i.nombre, p));
-        const b = boton('btn-lista' + (esta ? ' activo' : ''), esta ? '✓' : '🛒', () => {
-            if (esta) {
-                datos.lista[cat.nombre] = enLista.filter(i => !igual(i.nombre, p));
-                A.guardarLista(cat.nombre);
-                render();
-            } else agregar(cat, p);
-        }, esta ? `Quitar ${p} de la lista` : `Agregar ${p} a la lista`);
+        const item = enLista.find(i => igual(i.nombre, p));
+        const mio = !!(item && item.mio);
+        const b = boton('btn-lista' + (mio ? ' activo' : item ? ' otros' : ''), mio ? '✓' : '🛒', () => {
+            if (mio) { quitarMiPedido(cat.nombre, item.nombre); render(); }
+            else agregar(cat, p);
+        }, mio ? `Quitar mi pedido de ${p}` : `Pedir ${p}`);
+        if (item && !mio) b.title = 'Pedido por ' + item.pedidos.map(x => x.nombre).join(', ');
         b.dataset.foco = 'bl|' + cat.nombre + '|' + p;
         li.appendChild(b);
         ul.appendChild(li);
@@ -462,9 +564,12 @@ function panelEditar(cat) {
 }
 
 function tarjetaNuevaCategoria() {
+    const admin = A.esAdmin();
     const card = el('section', 'categoria nueva-categoria');
-    card.appendChild(el('h2', '', '➕ Nueva categoría'));
-    card.appendChild(el('p', 'ayuda', 'Por ejemplo: Panadería, Gas, Proveedor de pollo…'));
+    card.appendChild(el('h2', '', admin ? '➕ Nueva categoría' : '📨 Pedir nueva categoría'));
+    card.appendChild(el('p', 'ayuda', admin
+        ? 'Por ejemplo: Panadería, Gas, Proveedor de pollo…'
+        : 'El administrador la revisará antes de que aparezca.'));
     const fila = el('div', 'fila-nueva');
     const emo = el('select', 'emoji-sel');
     emo.setAttribute('aria-label', 'Emoji de la categoría');
@@ -479,18 +584,162 @@ function tarjetaNuevaCategoria() {
     nom.onkeydown = e => { if (e.key === 'Enter') crearCategoria(); };
     fila.append(emo, nom);
     card.appendChild(fila);
-    card.appendChild(boton('btn-primary btn-crear', 'Crear categoría', crearCategoria));
+    card.appendChild(boton('btn-primary btn-crear', admin ? 'Crear categoría' : 'Enviar solicitud', crearCategoria));
+
+    // Solicitudes de categoría que siguen esperando
+    const esperando = datos.solicitudes.filter(x => x.tipo === 'categoria');
+    if (esperando.length) {
+        const p = el('p', 'esperando', '⏳ Esperando aprobación: ');
+        p.append(esperando.map(x => `${x.emoji || ''} ${x.nombre}`.trim()).join(', '));
+        card.appendChild(p);
+    }
+    return card;
+}
+
+// ===== Vista ADMINISTRADOR =====
+function tarjetaSolicitudes() {
+    const card = el('section', 'categoria admin-card');
+    const head = el('div', 'cat-header');
+    head.appendChild(el('h2', '', '🔔 Solicitudes por aprobar'));
+    head.appendChild(el('span', 'badge' + (datos.solicitudes.length ? ' activo' : ''), datos.solicitudes.length));
+    card.appendChild(head);
+    if (!datos.solicitudes.length) {
+        card.appendChild(el('p', 'ayuda', 'No hay nada pendiente. Cuando alguien pida un producto o una categoría nueva, aparecerá aquí.'));
+        return card;
+    }
+    const ul = el('ul', 'lista-admin');
+    datos.solicitudes.forEach(sol => {
+        const li = el('li', 'fila-admin');
+        const info = el('div', 'fila-admin-info');
+        const titulo = el('span', 'fila-admin-titulo');
+        if (sol.tipo === 'categoria') {
+            titulo.append('Categoría ');
+            titulo.appendChild(el('b', '', `${sol.emoji || '🛒'} ${sol.nombre}`));
+        } else {
+            titulo.append('Producto ');
+            titulo.appendChild(el('b', '', sol.nombre));
+            titulo.append(` en ${sol.categoria}`);
+        }
+        info.appendChild(titulo);
+        info.appendChild(el('small', 'inv-meta', `Pedido por ${sol.por || 'alguien'} · ${hace(sol.fecha)}`));
+        li.appendChild(info);
+        const acc = el('div', 'fila-admin-acciones');
+        acc.appendChild(boton('btn-aprobar', '✔ Aprobar', () => aprobarSolicitud(sol)));
+        const rech = boton('btn-rechazar', '✕', null, 'Rechazar');
+        rech.onclick = () => confirmarDosToques(rech, '¿Rechazar?', () => rechazarSolicitud(sol));
+        acc.appendChild(rech);
+        li.appendChild(acc);
+        ul.appendChild(li);
+    });
+    card.appendChild(ul);
+    return card;
+}
+
+function tarjetaHistorial() {
+    const card = el('section', 'categoria admin-card');
+    card.appendChild(el('h2', 'titulo-admin', '📚 Semanas anteriores'));
+    if (!datos.historial.length) {
+        card.appendChild(el('p', 'ayuda', 'Cuando cierres la semana con 🧾 Cerrar semana, la lista final se guardará aquí.'));
+        return card;
+    }
+    const ul = el('ul', 'lista-admin');
+    datos.historial.slice(0, 12).forEach(h => {
+        const li = el('li', 'fila-admin');
+        const info = el('div', 'fila-admin-info');
+        info.appendChild(el('span', 'fila-admin-titulo', `🧾 ${fechaCorta(h.fecha)}`));
+        info.appendChild(el('small', 'inv-meta', `${h.total || 0} productos · cerrada por ${h.por || '—'}`));
+        li.appendChild(info);
+        li.appendChild(boton('btn-secondary btn-ver', 'Ver', () => {
+            $('modal-titulo').textContent = '🧾 ' + fechaCorta(h.fecha);
+            $('modal-texto').textContent = h.texto || '';
+            $('modal').classList.remove('oculto');
+        }));
+        ul.appendChild(li);
+    });
+    card.appendChild(ul);
+    return card;
+}
+
+function tarjetaUsuarios() {
+    const card = el('section', 'categoria admin-card');
+    const head = el('div', 'cat-header');
+    head.appendChild(el('h2', '', '👥 Usuarios'));
+    head.appendChild(el('span', 'badge activo', datos.usuarios.length));
+    card.appendChild(head);
+    card.appendChild(el('p', 'ayuda',
+        'Solo estas personas pueden entrar con su número de celular. También aparecen al enviar la lista por WhatsApp.'));
+
+    const form = el('div', 'form-usuario');
+    const nom = el('input');
+    nom.type = 'text'; nom.placeholder = 'Nombre'; nom.maxLength = 40; nom.autocomplete = 'off';
+    nom.dataset.foco = 'u-nombre';
+    nom.value = borradorUsuario.nombre;
+    nom.oninput = () => { borradorUsuario.nombre = nom.value; };
+    const tel = el('input');
+    tel.type = 'tel'; tel.inputMode = 'tel'; tel.placeholder = 'Celular (096 273 7275)'; tel.autocomplete = 'off';
+    tel.dataset.foco = 'u-tel';
+    tel.value = borradorUsuario.telefono;
+    tel.oninput = () => { borradorUsuario.telefono = tel.value; };
+    const area = el('select', 'area-sel');
+    area.setAttribute('aria-label', 'Área');
+    AREAS.forEach(a => area.appendChild(new Option(`${iconoArea(a)} ${a}`, a)));
+    area.value = borradorUsuario.area;
+    area.onchange = () => { borradorUsuario.area = area.value; };
+    const agregarUsuario = async () => {
+        try {
+            const existe = datos.usuarios.find(u => u.telefono === A.normalizarTelefono(tel.value));
+            const u = await A.guardarUsuario(nom.value, tel.value, area.value);
+            borradorUsuario.nombre = ''; borradorUsuario.telefono = '';
+            nom.value = ''; tel.value = '';
+            aviso(existe ? `✏️ ${u.nombre} actualizado` : `👤 ${u.nombre} agregado`);
+            render();
+        } catch (e) {
+            aviso({ 'sin-nombre': 'Escribe el nombre', 'numero-invalido': 'Revisa el número de celular' }[e.code]
+                || 'No se pudo guardar el usuario');
+        }
+    };
+    nom.onkeydown = e => { if (e.key === 'Enter') tel.focus(); };
+    tel.onkeydown = e => { if (e.key === 'Enter') agregarUsuario(); };
+    form.append(nom, tel, area, boton('btn-primary', '➕ Guardar usuario', agregarUsuario));
+    card.appendChild(form);
+
+    const ul = el('ul', 'lista-admin');
+    [...datos.usuarios].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).forEach(u => {
+        const li = el('li', 'fila-admin');
+        const info = el('div', 'fila-admin-info');
+        info.appendChild(el('span', 'fila-admin-titulo', `${iconoArea(u.area)} ${u.nombre}`));
+        info.appendChild(el('small', 'inv-meta', A.mostrarTelefono(u.telefono) + (u.area ? ' · ' + u.area : '')));
+        li.appendChild(info);
+        const acc = el('div', 'fila-admin-acciones');
+        acc.appendChild(boton('btn-icono', '✏️', () => {
+            borradorUsuario.nombre = u.nombre;
+            borradorUsuario.area = u.area || 'Otra';
+            borradorUsuario.telefono = A.mostrarTelefono(u.telefono);
+            render();
+            aviso('Haz los cambios y toca Guardar usuario');
+        }, 'Editar ' + u.nombre));
+        const del = boton('btn-rechazar', '🗑️', null, 'Quitar a ' + u.nombre);
+        del.onclick = () => confirmarDosToques(del, '¿Quitar?', async () => {
+            try { await A.borrarUsuario(u.telefono); aviso(`${u.nombre} ya no tiene acceso`); }
+            catch (e) { aviso('No se pudo quitar'); }
+            render();
+        });
+        acc.appendChild(del);
+        li.appendChild(acc);
+        ul.appendChild(li);
+    });
+    if (!datos.usuarios.length) ul.appendChild(el('li', 'ayuda', 'Todavía no hay usuarios. Agrega el primero arriba.'));
+    card.appendChild(ul);
     return card;
 }
 
 // ----- ACCIONES -----
 function agregar(cat, nombre) {
-    const items = itemsDe(cat.nombre);
-    if (items.some(i => igual(i.nombre, nombre))) { aviso('Ya está en la lista'); return; }
-    items.push({ nombre, cantidad: 1, unidad: '' });
-    A.guardarLista(cat.nombre);
+    const it = itemDe(cat.nombre, nombre);
+    if (it && it.mio) { aviso('Ya lo pediste. Cambia la cantidad en la lista.'); return; }
+    pedir(cat.nombre, nombre, 1);
     render();
-    aviso(`✓ ${nombre} a la lista`);
+    aviso(it ? `✓ Sumaste tu pedido de ${nombre}` : `✓ ${nombre} a la lista`);
 }
 
 function fijarStock(catNombre, prod, valor) {
@@ -502,6 +751,58 @@ function fijarStock(catNombre, prod, valor) {
     else delete datos.stock[catNombre][prod];
     A.guardarStock(catNombre, prod);
     pedirRender();
+}
+
+// Un usuario pide un producto nuevo: va a la lista marcado ⏳ y espera aprobación
+async function pedirProducto(cat, nombre) {
+    const yaPedido = datos.solicitudes.some(x => x.tipo === 'producto'
+        && igual(x.categoria, cat.nombre) && igual(x.nombre, nombre));
+    const it = itemDe(cat.nombre, nombre);
+    if (!it || !it.mio) pedir(cat.nombre, nombre, 1, { pendiente: true });
+    render();
+    if (yaPedido) { aviso('Ya fue pedido. Está en la lista con ⏳'); return; }
+    try {
+        await A.enviarSolicitud({ tipo: 'producto', categoria: cat.nombre, nombre });
+        aviso('📨 Enviado al administrador. Ya está en tu lista (⏳)');
+        pedirRender();
+    } catch (e) { aviso('No se pudo enviar la solicitud'); }
+}
+
+async function aprobarSolicitud(sol) {
+    if (sol.tipo === 'categoria') {
+        if (!buscarCat(sol.nombre)) {
+            datos.catalogo.push({ nombre: sol.nombre, emoji: sol.emoji || '🛒', productos: [] });
+            datos.eliminados = (datos.eliminados || []).filter(k => k !== sol.nombre + '|');
+        }
+    } else {
+        let cat = buscarCat(sol.categoria);
+        if (!cat) {   // la categoría fue borrada: se vuelve a crear
+            cat = { nombre: sol.categoria, emoji: '🛒', productos: [] };
+            datos.catalogo.push(cat);
+        }
+        if (!cat.productos.some(p => igual(p, sol.nombre))) cat.productos.push(sol.nombre);
+        datos.eliminados = (datos.eliminados || []).filter(k => k !== cat.nombre + '|' + sol.nombre);
+        const mapa = datos.lista[cat.nombre] || {};
+        Object.keys(mapa).filter(k => igual(k, sol.nombre) && mapa[k].pendiente).forEach(k => {
+            mapa[k].pendiente = false;
+            A.guardarEntrada(cat.nombre, k);
+        });
+    }
+    A.guardarCatalogo();
+    try { await A.cerrarSolicitud(sol.id); } catch (e) { /* se reintenta al volver el internet */ }
+    render();
+    aviso(`✔ ${sol.nombre} aprobado`);
+}
+
+async function rechazarSolicitud(sol) {
+    if (sol.tipo === 'producto') {
+        const mapa = datos.lista[sol.categoria] || {};
+        Object.keys(mapa).filter(k => igual(k, sol.nombre) && mapa[k].pendiente)
+            .forEach(k => quitarDeLaLista(sol.categoria, k));
+    }
+    try { await A.cerrarSolicitud(sol.id); } catch (e) { /* nada */ }
+    render();
+    aviso(`${sol.nombre} rechazado`);
 }
 
 function nuevoProducto(cat, nombre, tambienALaLista) {
@@ -519,11 +820,10 @@ function nuevoProducto(cat, nombre, tambienALaLista) {
 
 function quitarDelCatalogo(cat, nombre) {
     cat.productos = cat.productos.filter(p => !igual(p, nombre));
-    datos.lista[cat.nombre] = itemsDe(cat.nombre).filter(i => !igual(i.nombre, nombre));
+    quitarDeLaLista(cat.nombre, nombre);
     if (datos.stock[cat.nombre]) delete datos.stock[cat.nombre][nombre];
     if (esBase(cat.nombre, nombre)) (datos.eliminados = datos.eliminados || []).push(cat.nombre + '|' + nombre);
     A.guardarCatalogo();
-    A.guardarLista(cat.nombre);
     A.guardarStock(cat.nombre, nombre);
     render();
     aviso(`${nombre} quitado del catálogo`);
@@ -533,6 +833,15 @@ function crearCategoria() {
     const nombre = borrador.nombre.trim();
     if (!nombre) { aviso('Escribe el nombre de la categoría'); return; }
     if (buscarCat(nombre)) { aviso('Esa categoría ya existe'); return; }
+    if (!A.esAdmin()) {
+        if (datos.solicitudes.some(x => x.tipo === 'categoria' && igual(x.nombre, nombre))) {
+            aviso('Esa categoría ya fue pedida'); return;
+        }
+        A.enviarSolicitud({ tipo: 'categoria', nombre, emoji: borrador.emoji || '🛒' })
+            .then(() => { borrador.nombre = ''; render(); aviso('📨 Solicitud enviada al administrador'); })
+            .catch(() => aviso('No se pudo enviar la solicitud'));
+        return;
+    }
     const cat = { nombre, emoji: borrador.emoji || '🛒', productos: [] };
     datos.catalogo.push(cat);
     A.guardarCatalogo();
@@ -554,7 +863,7 @@ function eliminarCategoria(cat) {
     editando.delete(cat.nombre);
     if (CATEGORIAS_BASE[cat.nombre]) (datos.eliminados = datos.eliminados || []).push(cat.nombre + '|');
     A.guardarCatalogo();
-    A.guardarLista(cat.nombre);
+    A.borrarListaCategoria(cat.nombre);
     A.borrarStockCategoria(cat.nombre);
     render();
     aviso(`${cat.nombre} eliminada`);
@@ -582,15 +891,28 @@ function confirmarDosToques(btn, textoConfirmar, accion) {
 }
 
 // ----- RESUMEN -----
+const fechaCorta = ms => new Date(ms).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'short' });
+
 function actualizarResumen() {
-    let total = 0, pers = 0, agotados = 0;
+    let total = 0, mios = 0, pend = 0, agotados = 0;
+    const porArea = {};
     (datos.catalogo || []).forEach(cat => {
-        itemsDe(cat.nombre).forEach(i => { total++; if (!esBase(cat.nombre, i.nombre)) pers++; });
+        itemsDe(cat.nombre).forEach(i => {
+            total++;
+            if (i.mio) mios++;
+            if (i.pendiente) pend++;
+            new Set(i.pedidos.map(p => p.area || 'Sin área')).forEach(a => { porArea[a] = (porArea[a] || 0) + 1; });
+        });
         cat.productos.forEach(p => { if (esAgotado((stockDe(cat.nombre, p) || {}).hay)) agotados++; });
     });
     $('total-seleccionados').textContent = total;
-    $('total-personalizados').textContent = pers;
+    $('total-mios').textContent = mios;
+    $('total-personalizados').textContent = pend;
     $('total-agotados').textContent = agotados;
+    $('resumen-areas').textContent = Object.keys(porArea).length
+        ? 'Por área: ' + Object.entries(porArea).map(([a, n]) => `${iconoArea(a)} ${a} ${n}`).join(' · ') : '';
+    $('resumen-inicio').textContent = datos.listaInicio
+        ? `🗓️ Lista abierta desde el ${fechaCorta(datos.listaInicio)}` : '';
 }
 
 // ----- TEXTOS PARA COMPARTIR -----
@@ -598,8 +920,10 @@ const formatear = n => Number.isInteger(n) ? String(n) : String(n).replace('.', 
 const fechaHoy = () => new Date().toLocaleDateString('es-EC',
     { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
+// Lista completa: suma los pedidos de todos, con quién pidió cada cosa
 function textoLista() {
     let t = `🌮 *LISTA DE COMPRAS · ${NOMBRE_NEGOCIO.toUpperCase()}*\n📅 ${fechaHoy()}\n`;
+    if (datos.listaInicio) t += `🗓️ Pedidos desde el ${fechaCorta(datos.listaInicio)}\n`;
     let total = 0;
     (datos.catalogo || []).forEach(cat => {
         const items = itemsDe(cat.nombre);
@@ -607,8 +931,11 @@ function textoLista() {
         t += `\n${cat.emoji} *${cat.nombre.toUpperCase()}*\n`;
         items.forEach(i => {
             const s = stockDe(cat.nombre, i.nombre);
-            let linea = `• ${i.nombre} — comprar: ${formatear(i.cantidad)}${i.unidad ? ' ' + i.unidad : ''}`;
+            let linea = `• ${i.nombre}${i.pendiente ? ' (nuevo)' : ''} — ${formatear(i.total)}${i.unidad ? ' ' + i.unidad : ''}`;
             if (s) linea += ` (hay: ${s.hay})`;
+            linea += i.pedidos.length > 1
+                ? ` · ${i.pedidos.map(p => `${p.nombre || '?'} ${formatear(Number(p.cantidad))}`).join(', ')}`
+                : ` · ${i.pedidos[0].nombre || ''}`;
             t += linea + '\n';
             total++;
         });
@@ -657,6 +984,7 @@ function cambiarModo(m) {
 }
 $('tabCompras').onclick = () => cambiarModo('compras');
 $('tabInventario').onclick = () => cambiarModo('inventario');
+$('tabAdmin').onclick = () => cambiarModo('admin');
 
 $('btnVerLista').onclick = () => {
     const t = textoONada(); if (!t) return;
@@ -667,7 +995,9 @@ $('btnVerLista').onclick = () => {
 };
 $('btnCerrarModal').onclick = () => $('modal').classList.add('oculto');
 $('modal').onclick = e => { if (e.target.id === 'modal') $('modal').classList.add('oculto'); };
-document.addEventListener('keydown', e => { if (e.key === 'Escape') $('modal').classList.add('oculto'); });
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { $('modal').classList.add('oculto'); $('modalEnviar').classList.add('oculto'); cerrarModalSemana(); }
+});
 
 $('btnCopiar').onclick = async () => {
     try { await navigator.clipboard.writeText($('modal-texto').textContent); aviso('📋 Copiado'); }
@@ -678,11 +1008,45 @@ $('btnCopiar').onclick = async () => {
     }
 };
 
+// WhatsApp: elegir a cuál de los usuarios registrados se envía
+function elegirContacto(texto, titulo) {
+    $('enviar-titulo').textContent = titulo;
+    const ul = $('lista-contactos');
+    ul.innerHTML = '';
+    const yo = (A.sesionActual() || {}).telefono;
+    const contactos = [...datos.usuarios].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const enviar = tel => {
+        const base = tel ? `https://wa.me/${tel}` : 'https://wa.me/';
+        window.open(`${base}?text=${encodeURIComponent(texto)}`, '_blank');
+        $('modalEnviar').classList.add('oculto');
+    };
+    contactos.forEach(u => {
+        const li = el('li');
+        const b = boton('contacto', '', () => enviar(u.telefono));
+        b.appendChild(el('span', 'contacto-nombre',
+            `${iconoArea(u.area)} ${u.nombre}${u.telefono === yo ? ' (yo)' : ''}${u.area ? ' · ' + u.area : ''}`));
+        b.appendChild(el('span', 'contacto-tel', A.mostrarTelefono(u.telefono)));
+        li.appendChild(b);
+        ul.appendChild(li);
+    });
+    if (!contactos.length) {
+        ul.appendChild(el('li', 'ayuda', A.esAdmin()
+            ? 'Aún no hay usuarios. Agrégalos en la pestaña 👑 Admin.'
+            : 'El administrador aún no ha registrado contactos.'));
+    }
+    const li = el('li');
+    const otro = boton('contacto otro', '', () => enviar(''));
+    otro.appendChild(el('span', 'contacto-nombre', '📇 Elegir otro contacto en WhatsApp'));
+    li.appendChild(otro);
+    ul.appendChild(li);
+    $('modalEnviar').classList.remove('oculto');
+}
 $('btnEnviarWhatsApp').onclick = () => {
     const t = textoONada(); if (!t) return;
-    const base = TELEFONO_WHATSAPP ? `https://wa.me/${TELEFONO_WHATSAPP}` : 'https://wa.me/';
-    window.open(`${base}?text=${encodeURIComponent(t)}`, '_blank');
+    elegirContacto(t, modo === 'inventario' ? '📱 ¿A quién le envías el inventario?' : '📱 ¿A quién le envías la lista?');
 };
+$('btnCerrarEnviar').onclick = () => $('modalEnviar').classList.add('oculto');
+$('modalEnviar').onclick = e => { if (e.target.id === 'modalEnviar') $('modalEnviar').classList.add('oculto'); };
 
 $('btnDescargar').onclick = () => {
     const t = textoONada(); if (!t) return;
@@ -697,94 +1061,161 @@ $('btnDescargar').onclick = () => {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
-$('btnLimpiar').onclick = function () {
-    confirmarDosToques(this, '⚠️ ¿Borrar la lista? Toca otra vez', () => {
+// ----- Cierre de la semana (solo administrador) -----
+// Durante la semana cocina y cafetería van agregando sus pedidos.
+// El lunes el administrador revisa la lista final, la envía y cierra la semana.
+const cerrarModalSemana = () => $('modalSemana').classList.add('oculto');
+$('btnCerrarSemana').onclick = () => {
+    const t = textoLista();
+    if (!t) { aviso('La lista está vacía'); return; }
+    $('semana-texto').textContent = t;
+    $('modalSemana').classList.remove('oculto');
+};
+$('btnSemanaCancelar').onclick = cerrarModalSemana;
+$('modalSemana').onclick = e => { if (e.target.id === 'modalSemana') cerrarModalSemana(); };
+$('btnSemanaWhatsApp').onclick = () => elegirContacto(textoLista(), '📱 ¿A quién le envías la lista final?');
+$('btnSemanaCerrar').onclick = function () {
+    confirmarDosToques(this, '⚠️ Toca otra vez para cerrar', async () => {
+        const texto = textoLista();
+        const total = (datos.catalogo || []).reduce((n, c) => n + itemsDe(c.nombre).length, 0);
+        try {
+            await A.guardarHistorial({ texto, total, inicio: datos.listaInicio || null });
+        } catch (e) { aviso('No se pudo guardar en el historial. Revisa el internet.'); return; }
         datos.lista = {};
         A.borrarLista();
+        cerrarModalSemana();
         render();
-        aviso('🗑️ Lista de compras limpia (el stock se mantiene)');
+        aviso('✅ Semana cerrada. La lista nueva está lista para pedidos.');
     });
 };
 
+// Lista habitual: cada persona guarda la suya (cocina y cafetería piden cosas distintas)
+function misPedidos() {
+    const r = {};
+    (datos.catalogo || []).forEach(cat => {
+        const mios = itemsDe(cat.nombre).filter(i => i.mio)
+            .map(i => ({ nombre: i.nombre, cantidad: Number(i.mio.cantidad), unidad: i.unidad || '' }));
+        if (mios.length) r[cat.nombre] = mios;
+    });
+    return r;
+}
 $('btnGuardarHabitual').onclick = () => {
-    if (!textoLista()) { aviso('Primero arma una lista'); return; }
-    const copia = {};
-    for (const c in datos.lista) {
-        if (datos.lista[c].length) copia[c] = datos.lista[c].map(i => ({ ...i }));
-    }
-    datos.habitual = copia;
+    const mios = misPedidos();
+    if (!Object.keys(mios).length) { aviso('Primero agrega tus pedidos'); return; }
+    datos.habitual = mios;
     A.guardarHabitual();
-    aviso('💾 Guardada como lista habitual');
+    aviso('💾 Guardada como tu lista habitual');
 };
 
 $('btnCargarHabitual').onclick = () => {
     const habitual = datos.habitual;
-    if (!habitual || !Object.keys(habitual).length) { aviso('Arma tu lista y toca 💾 Guardar como habitual'); return; }
-    let nuevos = 0, catalogoCambio = false;
+    if (!habitual || !Object.keys(habitual).length) { aviso('Agrega tus pedidos y toca 💾 Guardar como habitual'); return; }
+    let nuevos = 0;
     for (const catNombre in habitual) {
         const cat = buscarCat(catNombre);
-        if (!cat) continue;
-        const items = itemsDe(cat.nombre);
-        let cambio = false;
+        if (!cat || !Array.isArray(habitual[catNombre])) continue;
         habitual[catNombre].forEach(h => {
-            if (!cat.productos.some(p => igual(p, h.nombre))) { cat.productos.push(h.nombre); catalogoCambio = true; }
-            if (!items.some(i => igual(i.nombre, h.nombre))) { items.push({ ...h }); nuevos++; cambio = true; }
+            if (!cat.productos.some(p => igual(p, h.nombre))) return;   // ya no está en el catálogo
+            const it = itemDe(cat.nombre, h.nombre);
+            if (it && it.mio) return;
+            pedir(cat.nombre, h.nombre, h.cantidad || 1, { unidad: h.unidad });
+            nuevos++;
         });
-        if (cambio) A.guardarLista(cat.nombre);
     }
-    if (catalogoCambio) A.guardarCatalogo();
     render();
-    aviso(nuevos ? `⭐ ${nuevos} productos agregados` : 'Ya tienes todo lo habitual');
+    aviso(nuevos ? `⭐ ${nuevos} pedidos agregados` : 'Ya tienes todo lo habitual');
 };
 
 // ----- SESIÓN Y CONEXIÓN -----
 const MENSAJES_LOGIN = {
+    'no-registrado': 'Ese número no está registrado. Pídele al administrador que te agregue.',
+    'numero-invalido': 'Revisa el número de celular',
+    'no-admin': 'Ese correo no es de administrador',
     'auth/invalid-credential': 'Correo o contraseña incorrectos',
     'auth/wrong-password': 'Correo o contraseña incorrectos',
     'auth/user-not-found': 'Correo o contraseña incorrectos',
     'auth/invalid-email': 'El correo no es válido',
     'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos.',
     'auth/network-request-failed': 'Sin internet. Revisa la conexión.',
+    'auth/admin-restricted-operation': 'Falta activar el acceso "Anónimo" en Firebase',
+    'auth/operation-not-allowed': 'Falta activar el acceso "Anónimo" en Firebase',
+    'unavailable': 'Sin internet. Revisa la conexión.',
+    'permission-denied': 'Sin permiso: revisa las reglas de Firestore',
     'no-cargado': 'Firebase aún no carga. Revisa el internet.',
 };
+const errorLogin = (e, porDefecto) => { $('loginError').textContent = MENSAJES_LOGIN[e && e.code] || porDefecto; };
 
-$('formLogin').onsubmit = async e => {
-    e.preventDefault();
+function mostrarFormulario(cual) {
+    $('formTelefono').classList.toggle('oculto', cual !== 'telefono');
+    $('formAdmin').classList.toggle('oculto', cual !== 'admin');
     $('loginError').textContent = '';
-    const btn = e.submitter || $('formLogin').querySelector('[type=submit]');
+    (cual === 'admin' ? (A.configurado ? $('loginEmail') : null) : $('loginTelefono'))?.focus();
+}
+$('btnModoAdmin').onclick = () => mostrarFormulario('admin');
+$('btnModoTelefono').onclick = () => mostrarFormulario('telefono');
+document.body.classList.toggle('con-firebase', A.configurado);
+
+async function conBoton(form, accion) {
+    const btn = form.querySelector('[type=submit]');
     btn.disabled = true;
-    try {
-        await A.entrar($('loginEmail').value.trim(), $('loginClave').value);
-        $('loginClave').value = '';
-    } catch (err) {
-        $('loginError').textContent = MENSAJES_LOGIN[err.code] || 'No se pudo entrar';
-    }
-    btn.disabled = false;
+    $('loginError').textContent = '';
+    try { await accion(); } finally { btn.disabled = false; }
+}
+
+$('formTelefono').onsubmit = e => {
+    e.preventDefault();
+    conBoton($('formTelefono'), async () => {
+        try { await A.entrarConTelefono($('loginTelefono').value); }
+        catch (err) { console.error(err); errorLogin(err, 'No se pudo entrar'); }
+    });
+};
+$('formAdmin').onsubmit = e => {
+    e.preventDefault();
+    conBoton($('formAdmin'), async () => {
+        try {
+            await A.entrarAdmin($('loginEmail').value.trim(), $('loginClave').value);
+            $('loginClave').value = '';
+        } catch (err) { console.error(err); errorLogin(err, 'No se pudo entrar'); }
+    });
 };
 $('btnOlvide').onclick = async () => {
     const email = $('loginEmail').value.trim();
     if (!email) { $('loginError').textContent = 'Escribe tu correo primero'; return; }
     try { await A.recuperarClave(email); $('loginError').textContent = '📧 Te enviamos un correo para cambiar la contraseña'; }
-    catch (err) { $('loginError').textContent = MENSAJES_LOGIN[err.code] || 'No se pudo enviar el correo'; }
+    catch (err) { errorLogin(err, 'No se pudo enviar el correo'); }
 };
 $('btnSalir').onclick = () => A.salir();
 
+let ultimaBienvenida = '';
 A.iniciar({
     alCambiar() {
-        if (completarConBase()) A.guardarCatalogo();
+        if (completarConBase() && A.esAdmin()) A.guardarCatalogo();
         pedirRender();
     },
-    alSesion(usuario, tipo) {
-        const conLogin = tipo === 'firebase' || tipo === 'error';
-        $('pantalla-login').classList.toggle('oculto', !(conLogin && !usuario));
-        $('usuario-actual').classList.toggle('oculto', !usuario);
-        $('btnSalir').classList.toggle('oculto', !usuario);
-        if (usuario) $('usuario-actual').textContent = '👤 ' + A.nombreUsuario();
-        if (conLogin && !usuario) {
-            $('contenedor-categorias').innerHTML = '<p class="cargando">Inicia sesión para ver los productos.</p>';
-        } else if (usuario) {
-            $('contenedor-categorias').innerHTML = '<p class="cargando">Cargando productos…</p>';
+    alSesion(sesion, tipo, info) {
+        $('pantalla-login').classList.toggle('oculto', !!sesion);
+        $('usuario-actual').classList.toggle('oculto', !sesion);
+        $('btnSalir').classList.toggle('oculto', !sesion);
+        $('saludo').classList.toggle('oculto', !sesion);
+        if (info && info.error) $('loginError').textContent = info.error;
+
+        if (!sesion) {
+            $('contenedor-categorias').innerHTML = '<p class="cargando">Entra con tu número para ver los productos.</p>';
+            ultimaBienvenida = '';
+            if (modo === 'admin') modo = 'compras';
+            return;
         }
+        const admin = sesion.tipo === 'admin';
+        $('usuario-actual').textContent = (admin ? '👑 ' : '👤 ') + sesion.nombre;
+        $('saludo').textContent = admin
+            ? `👋 ¡Hola, ${sesion.nombre}! Eres el administrador.`
+            : `👋 ¡Bienvenido, ${sesion.nombre}!${sesion.area ? ` ${iconoArea(sesion.area)} ${sesion.area}` : ''}`;
+        $('loginTelefono').value = '';
+        mostrarFormulario('telefono');
+        const clave = sesion.tipo + sesion.telefono;
+        if (ultimaBienvenida !== clave) { ultimaBienvenida = clave; aviso(`¡Bienvenido, ${sesion.nombre}! 🌮`); }
+        if (datos.catalogo) { completarConBase(); render(); }
+        else $('contenedor-categorias').innerHTML = '<p class="cargando">Cargando productos…</p>';
     },
     alConexion(tipo, mensaje) {
         const p = $('estado-conexion');

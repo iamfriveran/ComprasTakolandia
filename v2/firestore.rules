@@ -2,16 +2,64 @@ rules_version = '2';
 
 // Reglas de seguridad para CompraFácil.
 // Pégalas en Firebase → Firestore Database → Reglas → Publicar.
+//
+// ⚠️ CAMBIA 'tu-correo@gmail.com' por el correo del administrador
+//    (el mismo que pusiste en ADMIN_EMAILS dentro de firebase-config.js).
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /restaurantes/{restaurante}/{documento=**} {
-      // Solo usuarios con sesión iniciada (los que tú creas en Authentication).
-      allow read, write: if request.auth != null;
+    match /restaurantes/{r} {
 
-      // Opción más estricta: solo estos correos. Quita las // de abajo
-      // y borra la línea de arriba.
-      // allow read, write: if request.auth != null
-      //   && request.auth.token.email in ['francisco@correo.com', 'cocina@correo.com'];
+      // Administrador: entra con correo y contraseña
+      function esAdmin() {
+        return request.auth != null
+          && request.auth.token.email != null
+          && request.auth.token.email.lower() in ['tu-correo@gmail.com'];
+      }
+
+      // Usuario: entró con un número que el administrador registró
+      function esMiembro() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/restaurantes/$(r)/sesiones/$(request.auth.uid))
+          && exists(/databases/$(database)/documents/restaurantes/$(r)/usuarios/$(
+               get(/databases/$(database)/documents/restaurantes/$(r)/sesiones/$(request.auth.uid)).data.telefono));
+      }
+
+      function puedeEntrar() { return esAdmin() || esMiembro(); }
+
+      // Usuarios registrados (nombre + celular). Solo el admin los agrega o quita.
+      match /usuarios/{telefono} {
+        allow get: if request.auth != null;      // para comprobar el número al entrar
+        allow list: if puedeEntrar();            // contactos para WhatsApp
+        allow write: if esAdmin();
+      }
+
+      // Vincula el número de celular con la sesión de cada teléfono
+      match /sesiones/{uid} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if request.auth != null && request.auth.uid == uid
+          && exists(/databases/$(database)/documents/restaurantes/$(r)/usuarios/$(request.resource.data.telefono));
+        allow delete: if request.auth != null && (request.auth.uid == uid || esAdmin());
+      }
+
+      // Catálogo: todos lo leen, solo el admin lo cambia.
+      // Stock, lista de compras y listas habituales: todos los usuarios pueden cambiarlos.
+      match /datos/{documento} {
+        allow read: if puedeEntrar();
+        allow write: if esAdmin() || (esMiembro() && documento != 'catalogo');
+      }
+
+      // Listas de semanas anteriores (las guarda el admin al cerrar la semana)
+      match /historial/{id} {
+        allow read: if puedeEntrar();
+        allow create, delete: if esAdmin();
+      }
+
+      // Pedidos de productos o categorías nuevas
+      match /solicitudes/{id} {
+        allow read, create: if puedeEntrar();
+        allow update, delete: if esAdmin();
+      }
     }
   }
 }

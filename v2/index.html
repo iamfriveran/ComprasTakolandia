@@ -24,16 +24,18 @@
     </header>
 
     <div class="acciones-header">
-        <button id="btnLimpiar" class="btn-secondary">🗑️ Limpiar</button>
+        <button id="btnCerrarSemana" class="btn-amarillo oculto">🧾 Cerrar semana</button>
         <button id="btnVerLista" class="btn-primary">👁️ Ver Lista</button>
         <button id="btnEnviarWhatsApp" class="btn-primary">📱 WhatsApp</button>
         <button id="btnDescargar" class="btn-primary">📥 Descargar</button>
     </div>
 
     <main>
+        <p id="saludo" class="saludo oculto"></p>
         <div class="pestanas" role="tablist">
             <button id="tabCompras" class="pestana activo" role="tab">🛒 Compras</button>
             <button id="tabInventario" class="pestana" role="tab">📦 Inventario</button>
+            <button id="tabAdmin" class="pestana oculto" role="tab">👑 Admin <span id="badge-solicitudes" class="badge-mini oculto">0</span></button>
         </div>
 
         <div class="acciones-habitual solo-compras">
@@ -50,9 +52,12 @@
         </div>
 
         <div class="resumen">
-            <h3>📊 Resumen</h3>
-            <p>Productos seleccionados: <strong id="total-seleccionados">0</strong></p>
-            <p>Productos personalizados: <strong id="total-personalizados">0</strong></p>
+            <h3>📊 Resumen de la semana</h3>
+            <p id="resumen-inicio" class="resumen-inicio"></p>
+            <p>Productos en la lista: <strong id="total-seleccionados">0</strong></p>
+            <p>Mis pedidos: <strong id="total-mios">0</strong></p>
+            <p id="resumen-areas"></p>
+            <p>Esperando aprobación: <strong id="total-personalizados">0</strong></p>
             <p>Productos agotados: <strong id="total-agotados">0</strong></p>
         </div>
     </main>
@@ -61,22 +66,50 @@
         <p>&copy; 2026 Compras Takolandia - Gestión de Productos</p>
     </footer>
 
-    <!-- Inicio de sesión (solo con Firebase) -->
+    <!-- Inicio de sesión -->
     <div id="pantalla-login" class="login oculto">
-        <form id="formLogin" class="login-caja">
+        <div class="login-caja">
             <img src="takolandia-logo.svg" alt="Takolandia" class="login-logo"
                  onerror="this.onerror=null;this.src='takolandia-logo.png'">
-            <h2>Entrar a CompraFácil</h2>
-            <label>Correo
-                <input id="loginEmail" type="email" autocomplete="username" required>
-            </label>
-            <label>Contraseña
-                <input id="loginClave" type="password" autocomplete="current-password" required>
-            </label>
+
+            <form id="formTelefono" class="login-form">
+                <h2>¡Bienvenido! 👋</h2>
+                <label>Tu número de celular
+                    <input id="loginTelefono" type="tel" inputmode="tel" autocomplete="tel"
+                           placeholder="Ej. 096 273 7275" required>
+                </label>
+                <button type="submit" class="btn-primary">Entrar</button>
+                <button type="button" id="btnModoAdmin" class="btn-link">👑 Soy el administrador</button>
+            </form>
+
+            <form id="formAdmin" class="login-form oculto">
+                <h2>👑 Administrador</h2>
+                <label class="solo-firebase">Correo
+                    <input id="loginEmail" type="email" autocomplete="username">
+                </label>
+                <label class="solo-firebase">Contraseña
+                    <input id="loginClave" type="password" autocomplete="current-password">
+                </label>
+                <p class="ayuda-local">Modo local de prueba: el administrador entra sin contraseña.
+                    Cuando conectes Firebase se pedirá tu correo y contraseña.</p>
+                <button type="submit" class="btn-primary">Entrar como administrador</button>
+                <button type="button" id="btnOlvide" class="btn-link solo-firebase">Olvidé mi contraseña</button>
+                <button type="button" id="btnModoTelefono" class="btn-link">← Entrar con número de celular</button>
+            </form>
+
             <p id="loginError" class="login-error" role="alert"></p>
-            <button type="submit" class="btn-primary">Entrar</button>
-            <button type="button" id="btnOlvide" class="btn-link">Olvidé mi contraseña</button>
-        </form>
+        </div>
+    </div>
+
+    <!-- Elegir a quién enviar por WhatsApp -->
+    <div id="modalEnviar" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="enviar-titulo">
+        <div class="modal-caja">
+            <h3 id="enviar-titulo">📱 ¿A quién le envías la lista?</h3>
+            <ul id="lista-contactos" class="lista-contactos"></ul>
+            <div class="modal-acciones">
+                <button id="btnCerrarEnviar" class="btn-secondary">Cancelar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Ventana para ver la lista -->
@@ -87,6 +120,22 @@
             <div class="modal-acciones">
                 <button id="btnCopiar" class="btn-secondary">📋 Copiar</button>
                 <button id="btnCerrarModal" class="btn-primary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cerrar la semana (administrador) -->
+    <div id="modalSemana" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="semana-titulo">
+        <div class="modal-caja">
+            <h3 id="semana-titulo">🧾 Lista final de la semana</h3>
+            <p class="ayuda">Revisa la lista, envíala por WhatsApp y luego cierra la semana.
+                Al cerrarla se guarda en el historial y la lista queda vacía para los pedidos de la próxima semana.
+                El stock no se borra.</p>
+            <pre id="semana-texto"></pre>
+            <div class="modal-acciones">
+                <button id="btnSemanaWhatsApp" class="btn-primary">📱 WhatsApp</button>
+                <button id="btnSemanaCerrar" class="btn-peligro">✅ Cerrar semana</button>
+                <button id="btnSemanaCancelar" class="btn-secondary">Cancelar</button>
             </div>
         </div>
     </div>
