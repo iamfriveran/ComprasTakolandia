@@ -7,17 +7,17 @@
 // (todo se guarda solo en ese teléfono/computadora).
 
 export const firebaseConfig = {
-    apiKey: "PEGA_AQUI_TU_API_KEY",
-    authDomain: "tu-proyecto.firebaseapp.com",
-    projectId: "tu-proyecto",
-    storageBucket: "tu-proyecto.appspot.com",
-    messagingSenderId: "000000000000",
-    appId: "1:000000000000:web:0000000000000000"
+  apiKey: "AIzaSyCg5pk2q9lDmQ0Qm_nwYcVwOzc_mkZU6jk",
+  authDomain: "comprafacil-takolandia.firebaseapp.com",
+  projectId: "comprafacil-takolandia",
+  storageBucket: "comprafacil-takolandia.firebasestorage.app",
+  messagingSenderId: "517359703185",
+  appId: "1:517359703185:web:6193280bdd4ac9abc79b30"
 };
 
 // Correo(s) del ADMINISTRADOR (la cuenta de correo/contraseña que creaste en
 // Firebase → Authentication). Debe ser el MISMO correo que pongas en firestore.rules.
-export const ADMIN_EMAILS = ['tu-correo@gmail.com'];
+export const ADMIN_EMAILS = ['iamfrivera@gmail.com'];
 
 // Nombre que verá el administrador al entrar
 export const ADMIN_NOMBRE = 'Francisco';
