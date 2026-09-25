@@ -192,43 +192,7 @@ function tarjetaCompras(cat) {
     card.dataset.cat = cat.nombre;
     card.appendChild(encabezado(cat, true));
 
-    // Droplist con el stock actual al lado de cada producto
-    const sel = el('select', 'dropdown');
-    sel.dataset.foco = 'dd|' + cat.nombre;
-    sel.setAttribute('aria-label', 'Agregar producto de ' + cat.nombre);
-    const disponibles = ordenar(cat.productos.filter(p => !items.some(i => igual(i.nombre, p))));
-    sel.appendChild(new Option(
-        cat.productos.length === 0 ? '➕ Categoría vacía: agrega productos'
-        : disponibles.length ? `➕ Elegir producto… (${disponibles.length})` : '✔ Todo agregado', ''));
-    disponibles.forEach(p => {
-        const s = stockDe(cat.nombre, p);
-        const etiqueta = s ? `${p}  ·  ${esAgotado(s.hay) ? '⚠️ agotado' : 'hay ' + s.hay}` : p;
-        sel.appendChild(new Option(etiqueta, p));
-    });
-    sel.appendChild(new Option('✏️ Nuevo producto…', '__nuevo'));
-    card.appendChild(sel);
-
-    // Nuevo producto: se guarda en el catálogo y se añade a la lista
-    const otro = el('div', 'otro oculto');
-    const inp = el('input');
-    inp.type = 'text'; inp.placeholder = 'Nombre del nuevo producto'; inp.maxLength = 60;
-    inp.dataset.foco = 'nuevo|' + cat.nombre;
-    const agregarNuevo = () => {
-        const n = inp.value.trim();
-        if (!n) { inp.focus(); return; }
-        nuevoProducto(cat, n, true);
-    };
-    inp.onkeydown = e => {
-        if (e.key === 'Enter') agregarNuevo();
-        if (e.key === 'Escape') { otro.classList.add('oculto'); sel.value = ''; }
-    };
-    otro.append(inp, boton('btn-mini', 'Agregar', agregarNuevo));
-    card.appendChild(otro);
-
-    sel.onchange = () => {
-        if (sel.value === '__nuevo') { otro.classList.remove('oculto'); inp.focus(); return; }
-        if (sel.value) agregar(cat, sel.value);
-    };
+    card.appendChild(buscador(cat, items));
 
     const ul = el('ul', 'items');
     items.forEach((it, idx) => ul.appendChild(filaCompra(cat, it, idx)));
@@ -236,6 +200,117 @@ function tarjetaCompras(cat) {
 
     if (editando.has(cat.nombre)) card.appendChild(panelEditar(cat));
     return card;
+}
+
+// ----- Buscador: escribe las primeras letras o toca para ver todos -----
+const normal = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+let idBuscador = 0;
+
+function opcionesDe(cat, items, texto) {
+    const q = normal(texto);
+    const enLista = p => items.some(i => igual(i.nombre, p));
+    if (!q) return ordenar(cat.productos).filter(p => !enLista(p)).map(p => ({ tipo: 'prod', nombre: p }));
+
+    const encontrados = [];
+    cat.productos.forEach(p => {
+        const n = normal(p);
+        let puntos = -1;
+        if (n.startsWith(q)) puntos = 0;                                     // empieza igual
+        else if (n.split(/[\s\-\/]+/).some(w => w.startsWith(q))) puntos = 1; // alguna palabra empieza igual
+        else if (n.includes(q)) puntos = 2;                                  // lo contiene
+        if (puntos >= 0) encontrados.push({ tipo: enLista(p) ? 'ya' : 'prod', nombre: p, puntos });
+    });
+    encontrados.sort((a, b) => (a.tipo === 'ya') - (b.tipo === 'ya') || a.puntos - b.puntos
+        || a.nombre.localeCompare(b.nombre, 'es'));
+    if (!cat.productos.some(p => normal(p) === q)) {
+        const nombre = texto.trim();
+        encontrados.push({ tipo: 'nuevo', nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1) });
+    }
+    return encontrados;
+}
+
+function buscador(cat, items) {
+    const caja = el('div', 'buscador');
+    const idLista = 'opciones-' + (++idBuscador);
+    const inp = el('input', 'buscar');
+    const libres = cat.productos.filter(p => !items.some(i => igual(i.nombre, p))).length;
+    inp.type = 'search';
+    inp.autocomplete = 'off';
+    inp.spellcheck = false;
+    inp.placeholder = cat.productos.length
+        ? (libres ? `🔍 Escribe o toca para elegir (${libres})` : '✔ Todo agregado · escribe para crear')
+        : '🔍 Escribe el primer producto';
+    inp.dataset.foco = 'dd|' + cat.nombre;
+    inp.setAttribute('role', 'combobox');
+    inp.setAttribute('aria-label', 'Buscar producto de ' + cat.nombre);
+    inp.setAttribute('aria-controls', idLista);
+    inp.setAttribute('aria-expanded', 'false');
+
+    const lista = el('ul', 'opciones oculto');
+    lista.id = idLista;
+    lista.setAttribute('role', 'listbox');
+
+    let opciones = [], activo = 0;
+
+    const cerrar = () => { lista.classList.add('oculto'); inp.setAttribute('aria-expanded', 'false'); };
+    const elegir = o => {
+        if (o.tipo === 'ya') { aviso('Ya está en la lista'); return; }
+        inp.value = '';
+        if (o.tipo === 'nuevo') nuevoProducto(cat, o.nombre, true);
+        else agregar(cat, o.nombre);
+    };
+    const pintar = () => {
+        const q = normal(inp.value);
+        opciones = opcionesDe(cat, items, inp.value);
+        activo = Math.min(activo, Math.max(opciones.length - 1, 0));
+        lista.innerHTML = '';
+        if (!opciones.length) lista.appendChild(el('li', 'opcion vacia', 'Escribe el nombre del producto'));
+        opciones.forEach((o, i) => {
+            const li = el('li', `opcion ${o.tipo}${i === activo ? ' activa' : ''}`);
+            li.setAttribute('role', 'option');
+            const nombre = el('span', 'opcion-nombre');
+            if (o.tipo === 'nuevo') {
+                nombre.append('➕ Agregar «');
+                nombre.appendChild(el('b', '', o.nombre));
+                nombre.append('» como nuevo');
+            } else {
+                // resalta las letras que coinciden
+                const i0 = q ? normal(o.nombre).indexOf(q) : -1;
+                if (i0 >= 0) {
+                    nombre.append(o.nombre.slice(0, i0));
+                    nombre.appendChild(el('b', '', o.nombre.slice(i0, i0 + q.length)));
+                    nombre.append(o.nombre.slice(i0 + q.length));
+                } else nombre.textContent = o.nombre;
+            }
+            li.appendChild(nombre);
+            if (o.tipo === 'ya') li.appendChild(el('small', 'opcion-extra', '✓ en la lista'));
+            else if (o.tipo === 'prod') {
+                const s = stockDe(cat.nombre, o.nombre);
+                if (s) li.appendChild(el('small', 'opcion-extra' + (esAgotado(s.hay) ? ' agotado' : ''),
+                    esAgotado(s.hay) ? '⚠️ agotado' : 'hay ' + s.hay));
+            }
+            li.onmousedown = e => e.preventDefault();   // no cerrar el teclado al tocar
+            li.onclick = () => elegir(o);
+            lista.appendChild(li);
+        });
+        lista.classList.remove('oculto');
+        inp.setAttribute('aria-expanded', 'true');
+        const act = lista.querySelector('.activa');
+        if (act) act.scrollIntoView({ block: 'nearest' });
+    };
+
+    inp.onfocus = () => { activo = 0; pintar(); };
+    inp.oninput = () => { activo = 0; pintar(); };
+    inp.onblur = () => setTimeout(cerrar, 150);
+    inp.onkeydown = e => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); activo = Math.min(activo + 1, opciones.length - 1); pintar(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); activo = Math.max(activo - 1, 0); pintar(); }
+        else if (e.key === 'Enter') { e.preventDefault(); if (inp.value.trim() && opciones[activo]) elegir(opciones[activo]); }
+        else if (e.key === 'Escape') { inp.value = ''; cerrar(); inp.blur(); }
+    };
+
+    caja.append(inp, lista);
+    return caja;
 }
 
 function filaCompra(cat, it, idx) {
