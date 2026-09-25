@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4A2B8C">
+    <title>Compras Takolandia - Selección de Productos</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <!-- Usa tu SVG; si no carga, usa el PNG como respaldo -->
+            <img src="takolandia-logo.svg" alt="Takolandia Logo" class="logo-img"
+                 onerror="this.onerror=null;this.src='takolandia-logo.png'">
+            <h1>📋 Compras Takolandia</h1>
+        </div>
+        <p class="subtitle">Selección de Productos para la Semana</p>
+        <div class="barra-sesion">
+            <span id="estado-conexion" class="pastilla">Cargando…</span>
+            <span id="usuario-actual" class="pastilla oculto"></span>
+            <button id="btnSalir" class="btn-link oculto">Salir</button>
+        </div>
+    </header>
+
+    <div class="acciones-header">
+        <button id="btnLimpiar" class="btn-secondary">🗑️ Limpiar</button>
+        <button id="btnVerLista" class="btn-primary">👁️ Ver Lista</button>
+        <button id="btnEnviarWhatsApp" class="btn-primary">📱 WhatsApp</button>
+        <button id="btnDescargar" class="btn-primary">📥 Descargar</button>
+    </div>
+
+    <main>
+        <div class="pestanas" role="tablist">
+            <button id="tabCompras" class="pestana activo" role="tab">🛒 Compras</button>
+            <button id="tabInventario" class="pestana" role="tab">📦 Inventario</button>
+        </div>
+
+        <div class="acciones-habitual solo-compras">
+            <button id="btnCargarHabitual" class="btn-amarillo">⭐ Cargar lista habitual</button>
+            <button id="btnGuardarHabitual" class="btn-secondary">💾 Guardar como habitual</button>
+        </div>
+        <p class="ayuda-inventario solo-inventario">
+            Anota cuánto <b>hay</b> de cada producto. Todos los teléfonos lo ven al instante.
+            Toca 🛒 para mandarlo a la lista de compras.
+        </p>
+
+        <div id="contenedor-categorias" class="contenedor-categorias">
+            <p class="cargando">Cargando productos…</p>
+        </div>
+
+        <div class="resumen">
+            <h3>📊 Resumen</h3>
+            <p>Productos seleccionados: <strong id="total-seleccionados">0</strong></p>
+            <p>Productos personalizados: <strong id="total-personalizados">0</strong></p>
+            <p>Productos agotados: <strong id="total-agotados">0</strong></p>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Compras Takolandia - Gestión de Productos</p>
+    </footer>
+
+    <!-- Inicio de sesión (solo con Firebase) -->
+    <div id="pantalla-login" class="login oculto">
+        <form id="formLogin" class="login-caja">
+            <img src="takolandia-logo.svg" alt="Takolandia" class="login-logo"
+                 onerror="this.onerror=null;this.src='takolandia-logo.png'">
+            <h2>Entrar a CompraFácil</h2>
+            <label>Correo
+                <input id="loginEmail" type="email" autocomplete="username" required>
+            </label>
+            <label>Contraseña
+                <input id="loginClave" type="password" autocomplete="current-password" required>
+            </label>
+            <p id="loginError" class="login-error" role="alert"></p>
+            <button type="submit" class="btn-primary">Entrar</button>
+            <button type="button" id="btnOlvide" class="btn-link">Olvidé mi contraseña</button>
+        </form>
+    </div>
+
+    <!-- Ventana para ver la lista -->
+    <div id="modal" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+        <div class="modal-caja">
+            <h3 id="modal-titulo">📋 Lista de compras</h3>
+            <pre id="modal-texto"></pre>
+            <div class="modal-acciones">
+                <button id="btnCopiar" class="btn-secondary">📋 Copiar</button>
+                <button id="btnCerrarModal" class="btn-primary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
